@@ -11,6 +11,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TagMetadataTest {
 	@Test
+	void filterChoiceWindowLimitsVisibleChoicesAndClampsScrolling() {
+		assertEquals(3, FilterChoiceWindow.visibleLimit(600));
+		assertEquals(5, FilterChoiceWindow.visibleLimit(854));
+		assertEquals(0, FilterChoiceWindow.maxOffset(3, 5));
+		assertEquals(7, FilterChoiceWindow.maxOffset(10, 3));
+		assertEquals(0, FilterChoiceWindow.clampOffset(-1, 10, 3));
+		assertEquals(7, FilterChoiceWindow.clampOffset(9, 10, 3));
+		assertEquals(4, FilterChoiceWindow.clampOffset(4, 10, 3));
+		assertEquals(5, FilterChoiceWindow.scroll(4, 10, 3, -1));
+		assertEquals(3, FilterChoiceWindow.scroll(4, 10, 3, 1));
+		assertEquals(7, FilterChoiceWindow.scroll(7, 10, 3, -1));
+	}
+
+	@Test
 	void combinesPackAndResourceTagsForTheDeclaredResource() {
 		final TagMetadata metadata = TagMetadata.parse("""
 				{

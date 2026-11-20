@@ -29,7 +29,7 @@ Add one JSON document per pack at `assets/mtr_category_filter/packs/<filename>.j
 
 Resource keys are MTR resource IDs, separated into `vehicle`, `object`, and `rail` groups. The `resources` object is optional: pack tags work without listing individual IDs. MTR 4.0.5 does not expose source-pack identity through the selector API, so this mod traces the originating pack names from MTR's resource JSON during resource reload. Resources with no matching metadata remain available under their pack name, and those fallback pack names are sorted A-Z in the filter choices. Tags from multiple metadata documents referring to the same MTR resource are merged.
 
-After enabling or editing a pack, reload resource packs. In vehicle, eye-candy object, or rail-style selection, open the **Filters** control to expand or fold the choices, select a tag or fallback pack name, and page through the list when needed. Selecting the same choice again clears the filter. The existing list search field also accepts `tag:<tag>` or `pack:<name>` as quick filters; normal text continues to search resource names. Filtering affects available resources without hiding the currently selected resources.
+After enabling or editing a pack, reload resource packs. In vehicle, eye-candy object, or rail-style selection, open the **Filters** control on the left to expand or fold the choices. The panel shows up to five choices at once (three on narrow screens); scroll over the choices to reach the rest. Selecting the same choice again clears the filter. The existing list search field also accepts `tag:<tag>` or `pack:<name>` as quick filters; normal text continues to search resource names. Filtering affects available resources without hiding the currently selected resources.
 
 ## Compatibility
 
