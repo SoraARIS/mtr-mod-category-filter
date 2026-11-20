@@ -1,4 +1,4 @@
-package com.soraaris.mtrcategoryfilter.mixin;
+package com.soraaris.mtrcategoryfilter;
 
 import java.util.Set;
 

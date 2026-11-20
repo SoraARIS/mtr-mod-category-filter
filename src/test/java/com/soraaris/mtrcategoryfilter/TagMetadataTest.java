@@ -6,10 +6,49 @@ import com.google.gson.JsonParseException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TagMetadataTest {
+	@Test
+	void filterChoiceWindowLimitsVisibleChoicesAndClampsScrolling() {
+		assertEquals(3, FilterChoiceWindow.visibleLimit(600));
+		assertEquals(5, FilterChoiceWindow.visibleLimit(854));
+		assertEquals(3, FilterChoiceWindow.buttonCount(100, 600));
+		assertEquals(5, FilterChoiceWindow.buttonCount(100, 854));
+		assertEquals(0, FilterChoiceWindow.buttonCount(0, 854));
+		assertEquals(0, FilterChoiceWindow.maxOffset(3, 5));
+		assertEquals(7, FilterChoiceWindow.maxOffset(10, 3));
+		assertEquals(0, FilterChoiceWindow.clampOffset(-1, 10, 3));
+		assertEquals(7, FilterChoiceWindow.clampOffset(9, 10, 3));
+		assertEquals(4, FilterChoiceWindow.clampOffset(4, 10, 3));
+		assertEquals(5, FilterChoiceWindow.scroll(4, 10, 3, -1));
+		assertEquals(3, FilterChoiceWindow.scroll(4, 10, 3, 1));
+		assertEquals(7, FilterChoiceWindow.scroll(7, 10, 3, -1));
+		assertEquals(3, FilterChoiceWindow.page(0, 10, 3, 1));
+		assertEquals(0, FilterChoiceWindow.page(3, 10, 3, -1));
+		assertEquals(7, FilterChoiceWindow.page(6, 10, 3, 1));
+		assertEquals(7, FilterChoiceWindow.page(7, 10, 3, 1));
+		assertEquals(0, FilterChoiceWindow.page(0, 3, 3, 1));
+		assertEquals(7, FilterChoiceWindow.choiceIndex(7, 0, 10, 3));
+		assertEquals(9, FilterChoiceWindow.choiceIndex(7, 2, 10, 3));
+		assertEquals(-1, FilterChoiceWindow.choiceIndex(7, 3, 10, 3));
+		assertEquals(-1, FilterChoiceWindow.choiceIndex(8, 2, 10, 3));
+		assertEquals(-1, FilterChoiceWindow.choiceIndex(0, -1, 10, 3));
+	}
+
+	@Test
+	void missingResourceMetadataSharesOneImmutableEmptyValue() {
+		final TagResourceReloadListener.ResourceInfo first = TagResourceReloadListener.metadataFor("object", "missing");
+		final TagResourceReloadListener.ResourceInfo second = TagResourceReloadListener.metadataFor("object", "missing");
+
+		assertSame(first, second);
+		assertTrue(first.tags().isEmpty());
+		assertEquals("", first.packName());
+		assertThrows(UnsupportedOperationException.class, () -> first.tags().add("mutable"));
+	}
+
 	@Test
 	void combinesPackAndResourceTagsForTheDeclaredResource() {
 		final TagMetadata metadata = TagMetadata.parse("""

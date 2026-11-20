@@ -1,5 +1,6 @@
 package com.soraaris.mtrcategoryfilter.mixin;
 
+import com.soraaris.mtrcategoryfilter.TagSearchItem;
 import com.soraaris.mtrcategoryfilter.TagSearch;
 import org.mtr.mapping.mapper.TextFieldWidgetExtension;
 import org.mtr.mod.screen.DashboardList;
