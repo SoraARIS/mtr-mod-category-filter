@@ -26,6 +26,11 @@ class TagMetadataTest {
 		assertEquals(5, FilterChoiceWindow.scroll(4, 10, 3, -1));
 		assertEquals(3, FilterChoiceWindow.scroll(4, 10, 3, 1));
 		assertEquals(7, FilterChoiceWindow.scroll(7, 10, 3, -1));
+		assertEquals(3, FilterChoiceWindow.page(0, 10, 3, 1));
+		assertEquals(0, FilterChoiceWindow.page(3, 10, 3, -1));
+		assertEquals(7, FilterChoiceWindow.page(6, 10, 3, 1));
+		assertEquals(7, FilterChoiceWindow.page(7, 10, 3, 1));
+		assertEquals(0, FilterChoiceWindow.page(0, 3, 3, 1));
 		assertEquals(7, FilterChoiceWindow.choiceIndex(7, 0, 10, 3));
 		assertEquals(9, FilterChoiceWindow.choiceIndex(7, 2, 10, 3));
 		assertEquals(-1, FilterChoiceWindow.choiceIndex(7, 3, 10, 3));

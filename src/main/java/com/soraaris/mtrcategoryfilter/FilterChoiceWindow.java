@@ -36,4 +36,8 @@ public final class FilterChoiceWindow {
 	public static int scroll(int offset, int totalChoices, int buttonCount, double wheelAmount) {
 		return clampOffset(offset - (int) Math.signum(wheelAmount), totalChoices, buttonCount);
 	}
+
+	public static int page(int offset, int totalChoices, int buttonCount, int direction) {
+		return clampOffset(offset + Integer.signum(direction) * buttonCount, totalChoices, buttonCount);
+	}
 }

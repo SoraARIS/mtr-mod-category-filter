@@ -98,6 +98,12 @@ public abstract class DashboardListSelectorScreenMixin {
 	private ButtonWidgetExtension mtrCategoryFilter$toggleButton;
 
 	@Unique
+	private ButtonWidgetExtension mtrCategoryFilter$previousPageButton;
+
+	@Unique
+	private ButtonWidgetExtension mtrCategoryFilter$nextPageButton;
+
+	@Unique
 	private ObjectArrayList<ButtonWidgetExtension> mtrCategoryFilter$tagButtons;
 
 	@Inject(method = "init2", at = @At(value = "TAIL", remap = false), remap = false)
@@ -123,15 +129,28 @@ public abstract class DashboardListSelectorScreenMixin {
 		));
 		mtrCategoryFilter$visibleLimit = FilterChoiceWindow.buttonCount(mtrCategoryFilter$choices.size(), screen.width);
 		final int toggleY = screen.height - MTR_CATEGORY_FILTER_BOTTOM_MARGIN;
+		final int arrowWidth = Math.min(screen.SQUARE_SIZE, mtrCategoryFilter$panelWidth / 3);
+		final int toggleWidth = mtrCategoryFilter$panelWidth - arrowWidth * 2;
 
 		mtrCategoryFilter$toggleButton = new ButtonWidgetExtension(
-				mtrCategoryFilter$panelX, toggleY, mtrCategoryFilter$panelWidth, screen.SQUARE_SIZE,
+				mtrCategoryFilter$panelX, toggleY, toggleWidth, screen.SQUARE_SIZE,
 				"", button -> {
 					mtrCategoryFilter$expanded = !mtrCategoryFilter$expanded;
 					mtrCategoryFilter$refreshTagControls();
 				}
 		);
 		screen.addChild(new ClickableWidget(mtrCategoryFilter$toggleButton));
+
+		mtrCategoryFilter$previousPageButton = new ButtonWidgetExtension(
+				mtrCategoryFilter$panelX + toggleWidth, toggleY, arrowWidth, screen.SQUARE_SIZE,
+				"<", button -> mtrCategoryFilter$pageChoices(-1)
+		);
+		screen.addChild(new ClickableWidget(mtrCategoryFilter$previousPageButton));
+		mtrCategoryFilter$nextPageButton = new ButtonWidgetExtension(
+				mtrCategoryFilter$panelX + toggleWidth + arrowWidth, toggleY, arrowWidth, screen.SQUARE_SIZE,
+				">", button -> mtrCategoryFilter$pageChoices(1)
+		);
+		screen.addChild(new ClickableWidget(mtrCategoryFilter$nextPageButton));
 
 		mtrCategoryFilter$tagButtons = new ObjectArrayList<>(mtrCategoryFilter$visibleLimit);
 		for (int slot = 0; slot < mtrCategoryFilter$visibleLimit; slot++) {
@@ -314,6 +333,17 @@ public abstract class DashboardListSelectorScreenMixin {
 	}
 
 	@Unique
+	private void mtrCategoryFilter$pageChoices(int direction) {
+		mtrCategoryFilter$scrollOffset = FilterChoiceWindow.page(
+				mtrCategoryFilter$scrollOffset,
+				mtrCategoryFilter$choices.size(),
+				mtrCategoryFilter$visibleLimit,
+				direction
+		);
+		mtrCategoryFilter$refreshTagControls();
+	}
+
+	@Unique
 	private void mtrCategoryFilter$refreshAvailableList() {
 		final ObjectArrayList<DashboardListItem> availableData = new ObjectArrayList<>(allData.size());
 		for (final DashboardListItem item : allData) {
@@ -340,6 +370,14 @@ public abstract class DashboardListSelectorScreenMixin {
 				? "tag:" + mtrCategoryFilter$selectedTag
 				: !mtrCategoryFilter$selectedPack.isEmpty() ? "pack:" + mtrCategoryFilter$selectedPack : "all";
 		mtrCategoryFilter$toggleButton.setMessage2(new Text(TextHelper.literal("Filters: " + filterLabel + (mtrCategoryFilter$expanded ? " [-]" : " [+]")).data));
+		final boolean hasMultiplePages = mtrCategoryFilter$choices.size() > mtrCategoryFilter$visibleLimit;
+		mtrCategoryFilter$previousPageButton.visible = mtrCategoryFilter$expanded && hasMultiplePages && mtrCategoryFilter$scrollOffset > 0;
+		mtrCategoryFilter$nextPageButton.visible = mtrCategoryFilter$expanded
+				&& hasMultiplePages
+				&& mtrCategoryFilter$scrollOffset < FilterChoiceWindow.maxOffset(
+						mtrCategoryFilter$choices.size(),
+						mtrCategoryFilter$visibleLimit
+				);
 
 		for (int slot = 0; slot < mtrCategoryFilter$tagButtons.size(); slot++) {
 			final ButtonWidgetExtension button = mtrCategoryFilter$tagButtons.get(slot);
