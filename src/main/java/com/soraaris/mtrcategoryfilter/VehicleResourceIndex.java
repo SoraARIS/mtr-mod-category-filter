@@ -1,15 +1,15 @@
-package com.soraaris.mtrcategoryfilter.mixin;
+package com.soraaris.mtrcategoryfilter;
 
 import org.mtr.core.data.TransportMode;
 
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-final class VehicleResourceIndex {
+public final class VehicleResourceIndex {
 	private VehicleResourceIndex() {
 	}
 
-	static <T> T resolve(TransportMode mode, int index, Resolver<T> resolver) {
+	public static <T> T resolve(TransportMode mode, int index, Resolver<T> resolver) {
 		if (mode == null || index < 0) {
 			return null;
 		}
@@ -19,7 +19,7 @@ final class VehicleResourceIndex {
 	}
 
 	@FunctionalInterface
-	interface Resolver<T> {
+	public interface Resolver<T> {
 		void resolve(TransportMode mode, int index, Consumer<T> consumer);
 	}
 }

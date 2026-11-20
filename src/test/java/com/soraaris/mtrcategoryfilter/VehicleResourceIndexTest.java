@@ -1,4 +1,4 @@
-package com.soraaris.mtrcategoryfilter.mixin;
+package com.soraaris.mtrcategoryfilter;
 
 import org.junit.jupiter.api.Test;
 import org.mtr.core.data.TransportMode;

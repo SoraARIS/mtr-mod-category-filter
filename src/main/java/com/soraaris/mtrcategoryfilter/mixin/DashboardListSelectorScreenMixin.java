@@ -4,6 +4,7 @@ import com.soraaris.mtrcategoryfilter.TagResourceReloadListener;
 import com.soraaris.mtrcategoryfilter.TagSearch;
 import com.soraaris.mtrcategoryfilter.TagSearchItem;
 import com.soraaris.mtrcategoryfilter.FilterChoiceWindow;
+import com.soraaris.mtrcategoryfilter.VehicleResourceIndex;
 import org.mtr.core.data.Siding;
 import org.mtr.core.data.TransportMode;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
