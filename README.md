@@ -65,7 +65,7 @@ This writes `config/mtr_category_filter/export/packs/local-tags.json` in the sam
 
 ## Compatibility
 
-The selector hooks are targeted to MTR's `DashboardListSelectorScreen` and `DashboardList` implementation and are validated against the public MTR Fabric Loader 4.0.5 build for Minecraft 1.20.1. The affected selectors are vehicle selection, eye-candy object selection, and rail-style selection. Fallback pack names are recovered from MTR's current and legacy custom-resource JSON formats, including `mtrsteamloco:rails/*.json` and `mtrsteamloco:eyecandies/json/*.json`. This is a client-side mod; both the mod and MTR must be installed on the client. A later MTR release may require updating the mixin targets if its selector internals change.
+The selector hooks target MTR's `DashboardListSelectorScreen` and `DashboardList` implementation and are validated against the public MTR Fabric Loader 4.0.5 build for Minecraft 1.20.1. MTR 4.0.5 is the supported version; other MTR versions are not supported because the mixins depend on these internals. The affected selectors are vehicle selection, eye-candy object selection, and rail-style selection. Fallback pack names are recovered from MTR's current and legacy custom-resource JSON formats, including `mtrsteamloco:rails/*.json` and `mtrsteamloco:eyecandies/json/*.json`. This is a client-side mod; both the mod and MTR must be installed on the client.
 
 MTR is a runtime dependency and is not bundled. The mixins interact with MTR's public selector/resource classes; no MTR implementation code is copied into this project.
 

@@ -1,6 +1,5 @@
 package com.soraaris.mtrcategoryfilter;
 
-import com.google.gson.JsonParseException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -9,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -50,15 +50,34 @@ class LocalTagOverridesTest {
 	}
 
 	@Test
-	void rejectsInvalidKindsAndMalformedLocalFiles() throws IOException {
+	void rejectsInvalidKinds() throws IOException {
 		final LocalTagOverrides overrides = LocalTagOverrides.load(temporaryDirectory.resolve("local-tags.json"));
 		assertThrows(IllegalArgumentException.class, () -> overrides.addTag("formation", "mtr:train", "commuter"));
 		assertThrows(IllegalArgumentException.class, () -> overrides.addTag("vehicle", "mtr:train", " "));
+	}
 
-		final Path invalidFile = temporaryDirectory.resolve("invalid.json");
-		Files.writeString(invalidFile, """
+	@Test
+	void loadsMalformedFileNonfatallyAndPreservesItBeforeSaving() throws IOException {
+		final Path invalidFile = temporaryDirectory.resolve("local-tags.json");
+		final String invalidJson = """
 				{"schemaVersion":1,"pack":{"id":"local","tags":["not-local"]}}
-				""");
-		assertThrows(IOException.class, () -> LocalTagOverrides.load(invalidFile));
+				""";
+		Files.writeString(invalidFile, invalidJson);
+
+		final LocalTagOverrides overrides = assertDoesNotThrow(() -> LocalTagOverrides.load(invalidFile));
+		assertTrue(overrides.tagsFor("object", "mtr:sign").isEmpty());
+
+		final Path backup;
+		try (var files = Files.list(temporaryDirectory)) {
+			backup = files.filter(path -> path.getFileName().toString().startsWith("local-tags-invalid-"))
+					.findFirst()
+					.orElseThrow();
+		}
+		assertEquals(invalidJson, Files.readString(backup));
+
+		overrides.addTag("object", "mtr:sign", "platform");
+		assertEquals(invalidJson, Files.readString(backup));
+		assertEquals(List.of("platform"), List.copyOf(TagMetadata.parse(Files.readString(invalidFile))
+				.resources().get("object").get("mtr:sign")));
 	}
 }

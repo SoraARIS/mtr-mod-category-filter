@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -24,18 +26,26 @@ public final class LocalTagOverrides {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final String PACK_ID = "Local Overrides";
 	private static final List<String> KINDS = List.of("vehicle", "object", "rail");
+	private static final Logger LOGGER = LoggerFactory.getLogger(TagResourceReloadListener.MOD_ID);
 
 	private final Path file;
 	private final Map<String, Map<String, Set<String>>> tagsByResource;
+	private final boolean writable;
 
-	private LocalTagOverrides(Path file, Map<String, Map<String, Set<String>>> tagsByResource) {
+	private LocalTagOverrides(Path file, Map<String, Map<String, Set<String>>> tagsByResource, boolean writable) {
 		this.file = file;
 		this.tagsByResource = tagsByResource;
+		this.writable = writable;
 	}
 
-	public static LocalTagOverrides load(Path file) throws IOException {
-		if (!Files.exists(file)) {
-			return new LocalTagOverrides(file, new LinkedHashMap<>());
+	public static LocalTagOverrides load(Path file) {
+		try {
+			if (Files.notExists(file)) {
+				return new LocalTagOverrides(file, new LinkedHashMap<>(), true);
+			}
+		} catch (SecurityException exception) {
+			LOGGER.error("Unable to check local MTR tag overrides at {}; continuing without them and disabling changes to this file", file, exception);
+			return new LocalTagOverrides(file, new LinkedHashMap<>(), false);
 		}
 
 		try {
@@ -49,9 +59,20 @@ public final class LocalTagOverrides {
 				byId.forEach((id, tags) -> copiedResources.put(id, new LinkedHashSet<>(tags)));
 				resources.put(kind, copiedResources);
 			});
-			return new LocalTagOverrides(file, resources);
+			return new LocalTagOverrides(file, resources, true);
 		} catch (JsonParseException | IllegalArgumentException exception) {
-			throw new IOException("Invalid local tag override file: " + file, exception);
+			try {
+				final Path backup = backupInvalidFile(file);
+				LOGGER.warn("Ignoring malformed local MTR tag overrides at {}; preserved the original as {}", file, backup, exception);
+				return new LocalTagOverrides(file, new LinkedHashMap<>(), true);
+			} catch (IOException | SecurityException backupException) {
+				backupException.addSuppressed(exception);
+				LOGGER.error("Ignoring malformed local MTR tag overrides at {}; unable to preserve it, so local tag changes are disabled", file, backupException);
+				return new LocalTagOverrides(file, new LinkedHashMap<>(), false);
+			}
+		} catch (IOException | SecurityException exception) {
+			LOGGER.error("Unable to read local MTR tag overrides at {}; continuing without them and disabling changes to this file", file, exception);
+			return new LocalTagOverrides(file, new LinkedHashMap<>(), false);
 		}
 	}
 
@@ -65,6 +86,7 @@ public final class LocalTagOverrides {
 	}
 
 	public synchronized boolean addTag(String kind, String resourceId, String tag) throws IOException {
+		ensureWritable();
 		final String normalizedKind = normalizeKind(kind);
 		final String normalizedId = normalize(validate(resourceId, "Resource ID"));
 		final String normalizedTag = validate(tag, "Tag");
@@ -97,6 +119,12 @@ public final class LocalTagOverrides {
 		if (tags == null || !tags.remove(normalizedTag)) {
 			return false;
 		}
+		try {
+			ensureWritable();
+		} catch (IOException exception) {
+			tags.add(normalizedTag);
+			throw exception;
+		}
 		if (tags.isEmpty()) {
 			byId.remove(normalizedId);
 		}
@@ -118,6 +146,12 @@ public final class LocalTagOverrides {
 		write(destination);
 	}
 
+	private void ensureWritable() throws IOException {
+		if (!writable) {
+			throw new IOException("Local tag overrides are read-only because the existing file could not be read or preserved: " + file);
+		}
+	}
+
 	private void write(Path destination) throws IOException {
 		final Path absolute = destination.toAbsolutePath();
 		Files.createDirectories(absolute.getParent());
@@ -131,6 +165,22 @@ public final class LocalTagOverrides {
 			}
 		} finally {
 			Files.deleteIfExists(temporary);
+		}
+	}
+
+	private static Path backupInvalidFile(Path file) throws IOException {
+		final Path absolute = file.toAbsolutePath();
+		final Path backup = Files.createTempFile(absolute.getParent(), "local-tags-invalid-", ".json.bak");
+		try {
+			Files.copy(absolute, backup, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+			return backup;
+		} catch (IOException | SecurityException exception) {
+			try {
+				Files.deleteIfExists(backup);
+			} catch (IOException | SecurityException cleanupException) {
+				exception.addSuppressed(cleanupException);
+			}
+			throw exception;
 		}
 	}
 

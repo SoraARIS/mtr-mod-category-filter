@@ -65,7 +65,7 @@
 
 ## 兼容性
 
-选择器挂钩针对 MTR 的 `DashboardListSelectorScreen` 和 `DashboardList` 实现，已根据 Minecraft 1.20.1 的公开 MTR Fabric Loader 4.0.5 构建版本进行验证。受影响的选择器包括车辆、装饰物和轨道样式选择器。备用资源包名称会从 MTR 当前和旧版自定义资源 JSON 格式中恢复，包括 `mtrsteamloco:rails/*.json` 和 `mtrsteamloco:eyecandies/json/*.json`。这是一个客户端模组；客户端必须同时安装本模组和 MTR。后续 MTR 版本可能会更改选择器内部实现，届时可能需要更新 mixin 目标。
+选择器挂钩针对 MTR 的 `DashboardListSelectorScreen` 和 `DashboardList` 实现，已根据 Minecraft 1.20.1 的公开 MTR Fabric Loader 4.0.5 构建版本进行验证。支持的 MTR 版本为 4.0.5；由于 mixin 依赖这些内部实现，其他 MTR 版本不受支持。受影响的选择器包括车辆、装饰物和轨道样式选择器。备用资源包名称会从 MTR 当前和旧版自定义资源 JSON 格式中恢复，包括 `mtrsteamloco:rails/*.json` 和 `mtrsteamloco:eyecandies/json/*.json`。这是一个客户端模组；客户端必须同时安装本模组和 MTR。
 
 MTR 是运行时依赖，不会打包在本模组中。Mixin 使用 MTR 的公开选择器/资源类；本项目没有复制 MTR 的实现代码。
 

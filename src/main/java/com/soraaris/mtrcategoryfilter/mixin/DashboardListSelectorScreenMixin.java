@@ -4,6 +4,7 @@ import com.soraaris.mtrcategoryfilter.TagResourceReloadListener;
 import com.soraaris.mtrcategoryfilter.TagSearch;
 import com.soraaris.mtrcategoryfilter.TagSearchItem;
 import com.soraaris.mtrcategoryfilter.FilterChoiceWindow;
+import org.mtr.core.data.Siding;
 import org.mtr.core.data.TransportMode;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectImmutableList;
@@ -92,9 +93,6 @@ public abstract class DashboardListSelectorScreenMixin {
 	private ObjectImmutableList<RailResource> mtrCategoryFilter$rails;
 
 	@Unique
-	private TransportMode mtrCategoryFilter$transportMode;
-
-	@Unique
 	private ButtonWidgetExtension mtrCategoryFilter$toggleButton;
 
 	@Unique
@@ -117,8 +115,6 @@ public abstract class DashboardListSelectorScreenMixin {
 			mtrCategoryFilter$objects = CustomResourceLoader.getObjects();
 		} else if (mtrCategoryFilter$kind.equals("rail")) {
 			mtrCategoryFilter$rails = CustomResourceLoader.getRails();
-		} else {
-			mtrCategoryFilter$transportMode = ((VehicleSelectorScreenAccessor) (Object) this).mtrCategoryFilter$getSiding().getTransportMode();
 		}
 		mtrCategoryFilter$choices = mtrCategoryFilter$collectChoices(mtrCategoryFilter$kind);
 		final DashboardListSelectorScreen screen = (DashboardListSelectorScreen) (Object) this;
@@ -227,7 +223,7 @@ public abstract class DashboardListSelectorScreenMixin {
 		while (iterator.hasNext()) {
 			final DashboardListItem item = iterator.next();
 			final String resourceId = mtrCategoryFilter$resourceId(kind, item);
-			if (resourceId == null) {
+			if (resourceId == null || resourceId.isBlank()) {
 				continue;
 			}
 			final TagResourceReloadListener.ResourceInfo metadata = TagResourceReloadListener.metadataFor(kind, resourceId);
@@ -264,20 +260,39 @@ public abstract class DashboardListSelectorScreenMixin {
 	}
 
 	private String mtrCategoryFilter$resourceId(String kind, DashboardListItem item) {
-		if (item.id < 0 || item.id > Integer.MAX_VALUE) {
+		if (item == null || item.id < 0 || item.id > Integer.MAX_VALUE) {
 			return null;
 		}
 		final int index = (int) item.id;
 		if (kind.equals("object")) {
-			return index < mtrCategoryFilter$objects.size() ? mtrCategoryFilter$objects.get(index).getId() : null;
+			final ObjectImmutableList<ObjectResource> objects = mtrCategoryFilter$objects;
+			if (objects == null || index >= objects.size()) {
+				return null;
+			}
+			final ObjectResource object = objects.get(index);
+			return object == null ? null : mtrCategoryFilter$validResourceId(object.getId());
 		}
 		if (kind.equals("rail")) {
-			return index < mtrCategoryFilter$rails.size() ? mtrCategoryFilter$rails.get(index).getId() : null;
+			final ObjectImmutableList<RailResource> rails = mtrCategoryFilter$rails;
+			if (rails == null || index >= rails.size()) {
+				return null;
+			}
+			final RailResource rail = rails.get(index);
+			return rail == null ? null : mtrCategoryFilter$validResourceId(rail.getId());
 		}
 
-		final VehicleResource[] vehicle = {null};
-		CustomResourceLoader.getVehicleByIndex(mtrCategoryFilter$transportMode, index, resource -> vehicle[0] = resource);
-		return vehicle[0] == null ? null : vehicle[0].getId();
+		final Siding siding = ((VehicleSelectorScreenAccessor) (Object) this).mtrCategoryFilter$getSiding();
+		if (siding == null) {
+			return null;
+		}
+		final TransportMode transportMode = siding.getTransportMode();
+		final VehicleResource vehicle = VehicleResourceIndex.resolve(transportMode, index, CustomResourceLoader::getVehicleByIndex);
+		return vehicle == null ? null : mtrCategoryFilter$validResourceId(vehicle.getId());
+	}
+
+	@Unique
+	private static String mtrCategoryFilter$validResourceId(String resourceId) {
+		return resourceId == null || resourceId.isBlank() ? null : resourceId;
 	}
 
 	@Unique
@@ -286,7 +301,7 @@ public abstract class DashboardListSelectorScreenMixin {
 		final Set<String> packs = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 		for (final DashboardListItem item : allData) {
 			final String resourceId = mtrCategoryFilter$resourceId(kind, item);
-			if (resourceId == null) {
+			if (resourceId == null || resourceId.isBlank()) {
 				continue;
 			}
 			final TagResourceReloadListener.ResourceInfo metadata = TagResourceReloadListener.metadataFor(kind, resourceId);
