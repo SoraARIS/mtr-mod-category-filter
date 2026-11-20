@@ -114,7 +114,7 @@ public final class TagResourceReloadListener implements SimpleSynchronousResourc
 	}
 
 	private static void collectLegacyPackNames(ResourceManager manager, String directory, String kind, Map<ResourceKey, String> packNames) {
-		manager.findResources(directory, id -> id.getNamespace().equals("mtr-nte") && id.getPath().endsWith(".json"))
+		manager.findResources(directory, id -> LegacyResourceMetadata.supportsNamespace(id.getNamespace()) && id.getPath().endsWith(".json"))
 				.keySet()
 				.forEach(id -> {
 					for (final Resource resource : manager.getAllResources(id)) {
@@ -125,13 +125,8 @@ public final class TagResourceReloadListener implements SimpleSynchronousResourc
 							}
 							final JsonObject root = rootElement.getAsJsonObject();
 							final String packName = resource.getResourcePackName();
-							if (root.has("model")) {
-								final String path = id.getPath();
-								final String resourceId = path.substring(path.lastIndexOf('/') + 1, path.length() - ".json".length());
-								packNames.put(new ResourceKey(kind, resourceId), packName);
-							} else {
-								root.keySet().forEach(resourceId -> packNames.put(new ResourceKey(kind, resourceId), packName));
-							}
+							LegacyResourceMetadata.resourceIds(id.getPath(), root)
+									.forEach(resourceId -> packNames.put(new ResourceKey(kind, resourceId), packName));
 						} catch (IOException | JsonParseException | IllegalStateException exception) {
 							LOGGER.warn("Unable to read MTR resource pack origins from {}", id, exception);
 						}
