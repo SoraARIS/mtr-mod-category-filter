@@ -42,7 +42,7 @@ import java.util.Set;
 public abstract class DashboardListSelectorScreenMixin {
 	private static final int MTR_CATEGORY_FILTER_PANEL_PADDING = 8;
 	private static final int MTR_CATEGORY_FILTER_MAX_PANEL_WIDTH = 180;
-	private static final int MTR_CATEGORY_FILTER_FIRST_CHOICE_Y = 45;
+	private static final int MTR_CATEGORY_FILTER_BOTTOM_MARGIN = 40;
 
 	@Shadow(remap = false)
 	@Final
@@ -115,7 +115,7 @@ public abstract class DashboardListSelectorScreenMixin {
 				mtrCategoryFilter$choices.size(),
 				FilterChoiceWindow.visibleLimit(screen.width)
 		);
-		final int toggleY = screen.SQUARE_SIZE;
+		final int toggleY = screen.height - MTR_CATEGORY_FILTER_BOTTOM_MARGIN;
 
 		mtrCategoryFilter$toggleButton = new ButtonWidgetExtension(
 				mtrCategoryFilter$panelX, toggleY, mtrCategoryFilter$panelWidth, screen.SQUARE_SIZE,
@@ -143,7 +143,7 @@ public abstract class DashboardListSelectorScreenMixin {
 			return;
 		}
 		final DashboardListSelectorScreen screen = (DashboardListSelectorScreen) (Object) this;
-		final int choiceTop = MTR_CATEGORY_FILTER_FIRST_CHOICE_Y;
+		final int choiceTop = mtrCategoryFilter$choiceTop();
 		final int choiceBottom = choiceTop + mtrCategoryFilter$visibleLimit * screen.SQUARE_SIZE;
 		if (mouseX < mtrCategoryFilter$panelX || mouseX >= mtrCategoryFilter$panelX + mtrCategoryFilter$panelWidth || mouseY < choiceTop || mouseY >= choiceBottom) {
 			return;
@@ -336,10 +336,16 @@ public abstract class DashboardListSelectorScreenMixin {
 			button.visible = visible;
 			if (visible) {
 				button.setX2(mtrCategoryFilter$panelX);
-				button.setY2(MTR_CATEGORY_FILTER_FIRST_CHOICE_Y + visibleIndex * screen.SQUARE_SIZE);
+				button.setY2(mtrCategoryFilter$choiceTop() + visibleIndex * screen.SQUARE_SIZE);
 				button.setWidth2(mtrCategoryFilter$panelWidth);
 			}
 		}
+	}
+
+	@Unique
+	private int mtrCategoryFilter$choiceTop() {
+		final DashboardListSelectorScreen screen = (DashboardListSelectorScreen) (Object) this;
+		return screen.height - MTR_CATEGORY_FILTER_BOTTOM_MARGIN - mtrCategoryFilter$visibleLimit * screen.SQUARE_SIZE;
 	}
 
 	private static final class TaggedListItem extends DashboardListItem implements TagSearchItem {
