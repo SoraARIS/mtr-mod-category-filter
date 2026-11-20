@@ -4,7 +4,7 @@ import com.soraaris.mtrcategoryfilter.TagResourceReloadListener;
 import com.soraaris.mtrcategoryfilter.TagSearch;
 import com.soraaris.mtrcategoryfilter.TagSearchItem;
 import com.soraaris.mtrcategoryfilter.FilterChoiceWindow;
-import org.mtr.core.data.Siding;
+import org.mtr.core.data.TransportMode;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectImmutableList;
 import org.mtr.mapping.holder.ClickableWidget;
@@ -32,11 +32,9 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Locale;
 import java.util.Set;
+import java.util.ListIterator;
+import java.util.TreeSet;
 
 @Mixin(value = DashboardListSelectorScreen.class, remap = false)
 public abstract class DashboardListSelectorScreenMixin {
@@ -64,7 +62,7 @@ public abstract class DashboardListSelectorScreenMixin {
 	private String mtrCategoryFilter$kind;
 
 	@Unique
-	private ObjectArrayList<FilterChoice> mtrCategoryFilter$choices = new ObjectArrayList<>();
+	private ObjectArrayList<FilterChoice> mtrCategoryFilter$choices;
 
 	@Unique
 	private String mtrCategoryFilter$selectedTag = "";
@@ -88,10 +86,19 @@ public abstract class DashboardListSelectorScreenMixin {
 	private int mtrCategoryFilter$visibleLimit;
 
 	@Unique
+	private ObjectImmutableList<ObjectResource> mtrCategoryFilter$objects;
+
+	@Unique
+	private ObjectImmutableList<RailResource> mtrCategoryFilter$rails;
+
+	@Unique
+	private TransportMode mtrCategoryFilter$transportMode;
+
+	@Unique
 	private ButtonWidgetExtension mtrCategoryFilter$toggleButton;
 
 	@Unique
-	private ObjectArrayList<ButtonWidgetExtension> mtrCategoryFilter$tagButtons = new ObjectArrayList<>();
+	private ObjectArrayList<ButtonWidgetExtension> mtrCategoryFilter$tagButtons;
 
 	@Inject(method = "init2", at = @At(value = "TAIL", remap = false), remap = false)
 	private void mtrCategoryFilter$initializeTagControls(CallbackInfo callbackInfo) {
@@ -100,21 +107,21 @@ public abstract class DashboardListSelectorScreenMixin {
 			return;
 		}
 
-		mtrCategoryFilter$choices = mtrCategoryFilter$collectChoices((Object) this, mtrCategoryFilter$kind);
-		mtrCategoryFilter$choices.sort(Comparator
-				.comparing((FilterChoice choice) -> choice.kind)
-				.thenComparing(choice -> choice.value.toLowerCase(Locale.ROOT)));
-		mtrCategoryFilter$tagButtons = new ObjectArrayList<>();
+		if (mtrCategoryFilter$kind.equals("object")) {
+			mtrCategoryFilter$objects = CustomResourceLoader.getObjects();
+		} else if (mtrCategoryFilter$kind.equals("rail")) {
+			mtrCategoryFilter$rails = CustomResourceLoader.getRails();
+		} else {
+			mtrCategoryFilter$transportMode = ((VehicleSelectorScreenAccessor) (Object) this).mtrCategoryFilter$getSiding().getTransportMode();
+		}
+		mtrCategoryFilter$choices = mtrCategoryFilter$collectChoices(mtrCategoryFilter$kind);
 		final DashboardListSelectorScreen screen = (DashboardListSelectorScreen) (Object) this;
 		mtrCategoryFilter$panelX = MTR_CATEGORY_FILTER_PANEL_PADDING;
 		mtrCategoryFilter$panelWidth = Math.max(0, Math.min(
 				MTR_CATEGORY_FILTER_MAX_PANEL_WIDTH,
 				availableList.x - MTR_CATEGORY_FILTER_PANEL_PADDING * 2
 		));
-		mtrCategoryFilter$visibleLimit = Math.min(
-				mtrCategoryFilter$choices.size(),
-				FilterChoiceWindow.visibleLimit(screen.width)
-		);
+		mtrCategoryFilter$visibleLimit = FilterChoiceWindow.buttonCount(mtrCategoryFilter$choices.size(), screen.width);
 		final int toggleY = screen.height - MTR_CATEGORY_FILTER_BOTTOM_MARGIN;
 
 		mtrCategoryFilter$toggleButton = new ButtonWidgetExtension(
@@ -126,10 +133,12 @@ public abstract class DashboardListSelectorScreenMixin {
 		);
 		screen.addChild(new ClickableWidget(mtrCategoryFilter$toggleButton));
 
-		for (final FilterChoice choice : mtrCategoryFilter$choices) {
+		mtrCategoryFilter$tagButtons = new ObjectArrayList<>(mtrCategoryFilter$visibleLimit);
+		for (int slot = 0; slot < mtrCategoryFilter$visibleLimit; slot++) {
+			final int slotIndex = slot;
 			final ButtonWidgetExtension tagButton = new ButtonWidgetExtension(
-					mtrCategoryFilter$panelX, 0, mtrCategoryFilter$panelWidth, screen.SQUARE_SIZE, choice.kind + ":" + choice.value,
-					button -> mtrCategoryFilter$selectChoice(choice)
+					mtrCategoryFilter$panelX, 0, mtrCategoryFilter$panelWidth, screen.SQUARE_SIZE, "",
+					button -> mtrCategoryFilter$selectChoiceAt(slotIndex)
 			);
 			mtrCategoryFilter$tagButtons.add(tagButton);
 			screen.addChild(new ClickableWidget(tagButton));
@@ -190,34 +199,36 @@ public abstract class DashboardListSelectorScreenMixin {
 	}
 
 	private ObjectArrayList<DashboardListItem> mtrCategoryFilter$attachTags(ObjectArrayList<DashboardListItem> items, boolean filterBySelectedTag) {
-		final Object screen = this;
-		final String kind = mtrCategoryFilter$kindFor(screen);
+		final String kind = mtrCategoryFilter$kindFor(this);
 		if (kind == null) {
 			return items;
 		}
 
-		final ObjectImmutableList<ObjectResource> objects = kind.equals("object") ? CustomResourceLoader.getObjects() : null;
-		final ObjectImmutableList<RailResource> rails = kind.equals("rail") ? CustomResourceLoader.getRails() : null;
-		final ObjectArrayList<DashboardListItem> tagged = new ObjectArrayList<>(items.size());
-		for (final DashboardListItem item : items) {
-			final String resourceId = mtrCategoryFilter$resourceId(screen, kind, item, objects, rails);
+		final ListIterator<DashboardListItem> iterator = items.listIterator();
+		while (iterator.hasNext()) {
+			final DashboardListItem item = iterator.next();
+			final String resourceId = mtrCategoryFilter$resourceId(kind, item);
 			if (resourceId == null) {
-				tagged.add(item);
 				continue;
 			}
-			final Set<String> tags = TagResourceReloadListener.tagsFor(kind, resourceId);
-			final String packName = TagResourceReloadListener.packNameFor(kind, resourceId);
+			final TagResourceReloadListener.ResourceInfo metadata = TagResourceReloadListener.metadataFor(kind, resourceId);
+			final Set<String> tags = metadata.tags();
+			final String packName = metadata.packName();
 			if (filterBySelectedTag) {
 				if (!mtrCategoryFilter$selectedTag.isEmpty() && !TagSearch.hasTag(tags, mtrCategoryFilter$selectedTag)) {
+					iterator.remove();
 					continue;
 				}
 				if (!mtrCategoryFilter$selectedPack.isEmpty() && !TagSearch.hasPack(packName, mtrCategoryFilter$selectedPack)) {
+					iterator.remove();
 					continue;
 				}
 			}
-			tagged.add(tags.isEmpty() && packName.isEmpty() ? item : new TaggedListItem(item, tags, packName));
+			if (!tags.isEmpty() || !packName.isEmpty()) {
+				iterator.set(new TaggedListItem(item, tags, packName));
+			}
 		}
-		return tagged;
+		return items;
 	}
 
 	private static String mtrCategoryFilter$kindFor(Object screen) {
@@ -233,56 +244,60 @@ public abstract class DashboardListSelectorScreenMixin {
 		return null;
 	}
 
-	private String mtrCategoryFilter$resourceId(
-			Object screen,
-			String kind,
-			DashboardListItem item,
-			ObjectImmutableList<ObjectResource> objects,
-			ObjectImmutableList<RailResource> rails
-	) {
+	private String mtrCategoryFilter$resourceId(String kind, DashboardListItem item) {
 		if (item.id < 0 || item.id > Integer.MAX_VALUE) {
 			return null;
 		}
 		final int index = (int) item.id;
 		if (kind.equals("object")) {
-			return index < objects.size() ? objects.get(index).getId() : null;
+			return index < mtrCategoryFilter$objects.size() ? mtrCategoryFilter$objects.get(index).getId() : null;
 		}
 		if (kind.equals("rail")) {
-			return index < rails.size() ? rails.get(index).getId() : null;
+			return index < mtrCategoryFilter$rails.size() ? mtrCategoryFilter$rails.get(index).getId() : null;
 		}
 
-		final Siding siding = ((VehicleSelectorScreenAccessor) screen).mtrCategoryFilter$getSiding();
-		final String[] resourceId = {null};
-		CustomResourceLoader.getVehicleByIndex(siding.getTransportMode(), index, (VehicleResource vehicle) -> resourceId[0] = vehicle.getId());
-		return resourceId[0];
+		final VehicleResource[] vehicle = {null};
+		CustomResourceLoader.getVehicleByIndex(mtrCategoryFilter$transportMode, index, resource -> vehicle[0] = resource);
+		return vehicle[0] == null ? null : vehicle[0].getId();
 	}
 
 	@Unique
-	private ObjectArrayList<FilterChoice> mtrCategoryFilter$collectChoices(Object screen, String kind) {
-		final Set<String> tags = new HashSet<>();
-		final Set<String> packs = new HashSet<>();
-		final ObjectImmutableList<ObjectResource> objects = kind.equals("object") ? CustomResourceLoader.getObjects() : null;
-		final ObjectImmutableList<RailResource> rails = kind.equals("rail") ? CustomResourceLoader.getRails() : null;
+	private ObjectArrayList<FilterChoice> mtrCategoryFilter$collectChoices(String kind) {
+		final Set<String> tags = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+		final Set<String> packs = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 		for (final DashboardListItem item : allData) {
-			final String resourceId = mtrCategoryFilter$resourceId(screen, kind, item, objects, rails);
+			final String resourceId = mtrCategoryFilter$resourceId(kind, item);
 			if (resourceId == null) {
 				continue;
 			}
-			final Set<String> resourceTags = TagResourceReloadListener.tagsFor(kind, resourceId);
-			if (resourceTags.isEmpty()) {
-				final String packName = TagResourceReloadListener.packNameFor(kind, resourceId);
-				if (!packName.isEmpty()) {
-					packs.add(packName);
+			final TagResourceReloadListener.ResourceInfo metadata = TagResourceReloadListener.metadataFor(kind, resourceId);
+			if (metadata.tags().isEmpty()) {
+				if (!metadata.packName().isEmpty()) {
+					packs.add(metadata.packName());
 				}
 			} else {
-				tags.addAll(resourceTags);
+				tags.addAll(metadata.tags());
 			}
 		}
 
-		final ObjectArrayList<FilterChoice> choices = new ObjectArrayList<>();
-		TagSearch.alphabetical(tags).forEach(tag -> choices.add(new FilterChoice("tag", tag)));
-		TagSearch.alphabetical(packs).forEach(pack -> choices.add(new FilterChoice("pack", pack)));
+		final ObjectArrayList<FilterChoice> choices = new ObjectArrayList<>(tags.size() + packs.size());
+		tags.forEach(tag -> choices.add(new FilterChoice("tag", tag)));
+		packs.forEach(pack -> choices.add(new FilterChoice("pack", pack)));
 		return choices;
+	}
+
+	@Unique
+	private void mtrCategoryFilter$selectChoiceAt(int slot) {
+		final int choiceIndex = FilterChoiceWindow.choiceIndex(
+				mtrCategoryFilter$scrollOffset,
+				slot,
+				mtrCategoryFilter$choices.size(),
+				mtrCategoryFilter$visibleLimit
+		);
+		if (choiceIndex < 0) {
+			return;
+		}
+		mtrCategoryFilter$selectChoice(mtrCategoryFilter$choices.get(choiceIndex));
 	}
 
 	@Unique
@@ -300,7 +315,7 @@ public abstract class DashboardListSelectorScreenMixin {
 
 	@Unique
 	private void mtrCategoryFilter$refreshAvailableList() {
-		final ObjectArrayList<DashboardListItem> availableData = new ObjectArrayList<>();
+		final ObjectArrayList<DashboardListItem> availableData = new ObjectArrayList<>(allData.size());
 		for (final DashboardListItem item : allData) {
 			if (canRepeat || !selectedIds.contains(item.id)) {
 				availableData.add(item);
@@ -315,10 +330,7 @@ public abstract class DashboardListSelectorScreenMixin {
 			return;
 		}
 		final DashboardListSelectorScreen screen = (DashboardListSelectorScreen) (Object) this;
-		mtrCategoryFilter$visibleLimit = Math.min(
-				mtrCategoryFilter$choices.size(),
-				FilterChoiceWindow.visibleLimit(screen.width)
-		);
+		mtrCategoryFilter$visibleLimit = FilterChoiceWindow.buttonCount(mtrCategoryFilter$choices.size(), screen.width);
 		mtrCategoryFilter$scrollOffset = FilterChoiceWindow.clampOffset(
 				mtrCategoryFilter$scrollOffset,
 				mtrCategoryFilter$choices.size(),
@@ -329,14 +341,21 @@ public abstract class DashboardListSelectorScreenMixin {
 				: !mtrCategoryFilter$selectedPack.isEmpty() ? "pack:" + mtrCategoryFilter$selectedPack : "all";
 		mtrCategoryFilter$toggleButton.setMessage2(new Text(TextHelper.literal("Filters: " + filterLabel + (mtrCategoryFilter$expanded ? " [-]" : " [+]")).data));
 
-		for (int index = 0; index < mtrCategoryFilter$tagButtons.size(); index++) {
-			final ButtonWidgetExtension button = mtrCategoryFilter$tagButtons.get(index);
-			final int visibleIndex = index - mtrCategoryFilter$scrollOffset;
-			final boolean visible = mtrCategoryFilter$expanded && visibleIndex >= 0 && visibleIndex < mtrCategoryFilter$visibleLimit;
+		for (int slot = 0; slot < mtrCategoryFilter$tagButtons.size(); slot++) {
+			final ButtonWidgetExtension button = mtrCategoryFilter$tagButtons.get(slot);
+			final int choiceIndex = FilterChoiceWindow.choiceIndex(
+					mtrCategoryFilter$scrollOffset,
+					slot,
+					mtrCategoryFilter$choices.size(),
+					mtrCategoryFilter$visibleLimit
+			);
+			final boolean visible = mtrCategoryFilter$expanded && choiceIndex >= 0;
 			button.visible = visible;
 			if (visible) {
+				final FilterChoice choice = mtrCategoryFilter$choices.get(choiceIndex);
+				button.setMessage2(new Text(TextHelper.literal(choice.kind + ":" + choice.value).data));
 				button.setX2(mtrCategoryFilter$panelX);
-				button.setY2(mtrCategoryFilter$choiceTop() + visibleIndex * screen.SQUARE_SIZE);
+				button.setY2(mtrCategoryFilter$choiceTop() + slot * screen.SQUARE_SIZE);
 				button.setWidth2(mtrCategoryFilter$panelWidth);
 			}
 		}
@@ -354,7 +373,7 @@ public abstract class DashboardListSelectorScreenMixin {
 
 		private TaggedListItem(DashboardListItem delegate, Set<String> tags, String packName) {
 			super(delegate.id, delegate.getName(false), delegate.getColor(false));
-			this.tags = Collections.unmodifiableSet(tags);
+			this.tags = tags;
 			this.packName = packName;
 		}
 

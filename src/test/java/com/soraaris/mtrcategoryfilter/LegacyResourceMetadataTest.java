@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,7 +22,7 @@ class LegacyResourceMetadataTest {
 				""").getAsJsonObject();
 
 		assertTrue(LegacyResourceMetadata.supportsNamespace("mtrsteamloco"));
-		assertEquals(Set.of("embankment_cobble"), LegacyResourceMetadata.resourceIds("rails/embankment_cobble.json", rail));
+		assertEquals(Set.of("embankment_cobble"), resourceIds("rails/embankment_cobble.json", rail));
 	}
 
 	@Test
@@ -38,7 +39,7 @@ class LegacyResourceMetadataTest {
 
 		assertEquals(
 				Set.of("shinkansen_bridge_round_center"),
-				LegacyResourceMetadata.resourceIds("eyecandies/json/shinkansen_bridge_round_center.json", object)
+				resourceIds("eyecandies/json/shinkansen_bridge_round_center.json", object)
 		);
 	}
 
@@ -51,7 +52,13 @@ class LegacyResourceMetadataTest {
 				}
 				""").getAsJsonObject();
 
-		assertEquals(Set.of("track_a", "track_b"), LegacyResourceMetadata.resourceIds("rails/tracks.json", groupedDefinitions));
+		assertEquals(Set.of("track_a", "track_b"), resourceIds("rails/tracks.json", groupedDefinitions));
 		assertTrue(LegacyResourceMetadata.supportsNamespace("mtr-nte"));
+	}
+
+	private static Set<String> resourceIds(String path, JsonObject definition) {
+		final Set<String> ids = new HashSet<>();
+		LegacyResourceMetadata.forEachResourceId(path, definition, ids::add);
+		return ids;
 	}
 }

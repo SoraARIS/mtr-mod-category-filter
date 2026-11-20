@@ -23,7 +23,8 @@ import java.util.Set;
 public final class TagResourceReloadListener implements SimpleSynchronousResourceReloadListener {
 	public static final String MOD_ID = "mtr_category_filter";
 	private static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-	private static volatile Snapshot snapshot = new Snapshot(Collections.emptyMap(), Collections.emptyMap());
+	private static final ResourceInfo EMPTY_RESOURCE_INFO = new ResourceInfo(Collections.emptySet(), "");
+	private static volatile Snapshot snapshot = new Snapshot(Collections.emptyMap());
 
 	@Override
 	public Identifier getFabricId() {
@@ -32,49 +33,47 @@ public final class TagResourceReloadListener implements SimpleSynchronousResourc
 
 	@Override
 	public void reload(ResourceManager manager) {
-		final Map<ResourceKey, Set<String>> next = new HashMap<>();
-		final Map<ResourceKey, String> nextPackByResource = new HashMap<>();
+		final Map<ResourceKey, MutableResourceInfo> resources = new HashMap<>();
 		final Map<String, Set<String>> packTagsByName = new HashMap<>();
 		manager.findResources("packs", id -> id.getNamespace().equals(MOD_ID) && id.getPath().endsWith(".json"))
 				.forEach((id, resource) -> {
 					try (Reader reader = resource.getReader()) {
 						final TagMetadata metadata = TagMetadata.parse(readAll(reader));
 						packTagsByName.computeIfAbsent(normalize(metadata.packId()), ignored -> new HashSet<>()).addAll(metadata.packTags());
-						metadata.resources().forEach((kind, resources) -> resources.forEach((resourceId, resourceTags) -> {
-							final Set<String> merged = next.computeIfAbsent(new ResourceKey(kind, resourceId), ignored -> new HashSet<>());
-							merged.addAll(metadata.packTags());
-							merged.addAll(resourceTags);
+						metadata.resources().forEach((kind, resourceEntries) -> resourceEntries.forEach((resourceId, resourceTags) -> {
+							final MutableResourceInfo info = resources.computeIfAbsent(new ResourceKey(kind, resourceId), ignored -> new MutableResourceInfo());
+							info.tags.addAll(metadata.packTags());
+							info.tags.addAll(resourceTags);
 						}));
 					} catch (IOException | JsonParseException | IllegalArgumentException exception) {
 						LOGGER.error("Ignoring invalid MTR category metadata at {}", id, exception);
 					}
 				});
 
-		collectPackNames(manager, new Identifier("mtr", "mtr_custom_resources.json"), nextPackByResource);
-		collectPackNames(manager, new Identifier("mtr", "mtr_custom_resources_pending_migration.json"), nextPackByResource);
-		collectLegacyPackNames(manager, "rails", "rail", nextPackByResource);
-		collectLegacyPackNames(manager, "eyecandies", "object", nextPackByResource);
-		nextPackByResource.forEach((key, packName) -> {
-			final Set<String> packTags = packTagsByName.get(normalize(packName));
+		collectPackNames(manager, new Identifier("mtr", "mtr_custom_resources.json"), resources);
+		collectPackNames(manager, new Identifier("mtr", "mtr_custom_resources_pending_migration.json"), resources);
+		collectLegacyPackNames(manager, "rails", "rail", resources);
+		collectLegacyPackNames(manager, "eyecandies", "object", resources);
+		resources.values().forEach(info -> {
+			final Set<String> packTags = packTagsByName.get(normalize(info.packName));
 			if (packTags != null && !packTags.isEmpty()) {
-				next.computeIfAbsent(key, ignored -> new HashSet<>()).addAll(packTags);
+				info.tags.addAll(packTags);
 			}
 		});
 
-		final Map<ResourceKey, Set<String>> immutable = new HashMap<>();
-		next.forEach((key, tags) -> immutable.put(key, Collections.unmodifiableSet(new HashSet<>(tags))));
-		snapshot = new Snapshot(Collections.unmodifiableMap(immutable), Collections.unmodifiableMap(nextPackByResource));
+		final Map<ResourceKey, ResourceInfo> immutable = new HashMap<>(resources.size());
+		resources.forEach((key, info) -> immutable.put(
+				key,
+				new ResourceInfo(info.tags.isEmpty() ? Collections.emptySet() : Collections.unmodifiableSet(info.tags), info.packName)
+		));
+		snapshot = new Snapshot(Collections.unmodifiableMap(immutable));
 	}
 
-	public static Set<String> tagsFor(String kind, String resourceId) {
-		return snapshot.tagsByResource.getOrDefault(new ResourceKey(kind, resourceId), Collections.emptySet());
+	public static ResourceInfo metadataFor(String kind, String resourceId) {
+		return snapshot.resources.getOrDefault(new ResourceKey(kind, resourceId), EMPTY_RESOURCE_INFO);
 	}
 
-	public static String packNameFor(String kind, String resourceId) {
-		return snapshot.packByResource.getOrDefault(new ResourceKey(kind, resourceId), "");
-	}
-
-	private static void collectPackNames(ResourceManager manager, Identifier id, Map<ResourceKey, String> packNames) {
+	private static void collectPackNames(ResourceManager manager, Identifier id, Map<ResourceKey, MutableResourceInfo> resources) {
 		for (final Resource resource : manager.getAllResources(id)) {
 			try (Reader reader = resource.getReader()) {
 				final JsonElement rootElement = JsonParser.parseReader(reader);
@@ -83,17 +82,17 @@ public final class TagResourceReloadListener implements SimpleSynchronousResourc
 				}
 				final JsonObject root = rootElement.getAsJsonObject();
 				final String packName = resource.getResourcePackName();
-				collectArrayResources(root, "vehicles", "vehicle", packName, packNames);
-				collectArrayResources(root, "objects", "object", packName, packNames);
-				collectArrayResources(root, "rails", "rail", packName, packNames);
-				collectLegacyVehicles(root, packName, packNames);
+				collectArrayResources(root, "vehicles", "vehicle", packName, resources);
+				collectArrayResources(root, "objects", "object", packName, resources);
+				collectArrayResources(root, "rails", "rail", packName, resources);
+				collectLegacyVehicles(root, packName, resources);
 			} catch (IOException | JsonParseException | IllegalStateException exception) {
 				LOGGER.warn("Unable to read MTR resource pack origins from {}", id, exception);
 			}
 		}
 	}
 
-	private static void collectArrayResources(JsonObject root, String arrayName, String kind, String packName, Map<ResourceKey, String> packNames) {
+	private static void collectArrayResources(JsonObject root, String arrayName, String kind, String packName, Map<ResourceKey, MutableResourceInfo> resources) {
 		if (!root.has(arrayName) || !root.get(arrayName).isJsonArray()) {
 			return;
 		}
@@ -101,19 +100,19 @@ public final class TagResourceReloadListener implements SimpleSynchronousResourc
 			if (element.isJsonObject() && element.getAsJsonObject().has("id")) {
 				final JsonElement id = element.getAsJsonObject().get("id");
 				if (id.isJsonPrimitive() && id.getAsJsonPrimitive().isString() && !id.getAsString().isBlank()) {
-					packNames.put(new ResourceKey(kind, id.getAsString()), packName);
+					setPackName(resources, kind, id.getAsString(), packName);
 				}
 			}
 		}
 	}
 
-	private static void collectLegacyVehicles(JsonObject root, String packName, Map<ResourceKey, String> packNames) {
+	private static void collectLegacyVehicles(JsonObject root, String packName, Map<ResourceKey, MutableResourceInfo> resources) {
 		if (root.has("custom_trains") && root.get("custom_trains").isJsonObject()) {
-			root.getAsJsonObject("custom_trains").keySet().forEach(id -> packNames.put(new ResourceKey("vehicle", id), packName));
+			root.getAsJsonObject("custom_trains").keySet().forEach(id -> setPackName(resources, "vehicle", id, packName));
 		}
 	}
 
-	private static void collectLegacyPackNames(ResourceManager manager, String directory, String kind, Map<ResourceKey, String> packNames) {
+	private static void collectLegacyPackNames(ResourceManager manager, String directory, String kind, Map<ResourceKey, MutableResourceInfo> resources) {
 		manager.findResources(directory, id -> LegacyResourceMetadata.supportsNamespace(id.getNamespace()) && id.getPath().endsWith(".json"))
 				.keySet()
 				.forEach(id -> {
@@ -125,13 +124,20 @@ public final class TagResourceReloadListener implements SimpleSynchronousResourc
 							}
 							final JsonObject root = rootElement.getAsJsonObject();
 							final String packName = resource.getResourcePackName();
-							LegacyResourceMetadata.resourceIds(id.getPath(), root)
-									.forEach(resourceId -> packNames.put(new ResourceKey(kind, resourceId), packName));
+							LegacyResourceMetadata.forEachResourceId(
+									id.getPath(),
+									root,
+									resourceId -> setPackName(resources, kind, resourceId, packName)
+							);
 						} catch (IOException | JsonParseException | IllegalStateException exception) {
 							LOGGER.warn("Unable to read MTR resource pack origins from {}", id, exception);
 						}
 					}
 				});
+	}
+
+	private static void setPackName(Map<ResourceKey, MutableResourceInfo> resources, String kind, String resourceId, String packName) {
+		resources.computeIfAbsent(new ResourceKey(kind, resourceId), ignored -> new MutableResourceInfo()).packName = packName;
 	}
 
 	private static String readAll(Reader reader) throws IOException {
@@ -155,6 +161,14 @@ public final class TagResourceReloadListener implements SimpleSynchronousResourc
 		}
 	}
 
-	private record Snapshot(Map<ResourceKey, Set<String>> tagsByResource, Map<ResourceKey, String> packByResource) {
+	public record ResourceInfo(Set<String> tags, String packName) {
+	}
+
+	private static final class MutableResourceInfo {
+		private final Set<String> tags = new HashSet<>();
+		private String packName = "";
+	}
+
+	private record Snapshot(Map<ResourceKey, ResourceInfo> resources) {
 	}
 }
