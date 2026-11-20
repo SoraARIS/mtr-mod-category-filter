@@ -2,6 +2,7 @@ package com.soraaris.mtrcategoryfilter.mixin;
 
 import com.soraaris.mtrcategoryfilter.TagResourceReloadListener;
 import com.soraaris.mtrcategoryfilter.TagSearch;
+import com.soraaris.mtrcategoryfilter.TagSearchItem;
 import org.mtr.core.data.Siding;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import org.mtr.libraries.it.unimi.dsi.fastutil.objects.ObjectImmutableList;
