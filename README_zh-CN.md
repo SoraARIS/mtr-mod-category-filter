@@ -1,4 +1,4 @@
-[English](README.md) | [简体中文](README_zh-CN.md)
+[English](README.md#english) | [简体中文](README.md#simplified-chinese)
 
 # MTR 类别筛选器
 
