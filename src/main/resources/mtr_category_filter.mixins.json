@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "com.soraaris.mtrcategoryfilter.mixin",
+  "refmap": "mtr_category_filter.refmap.json",
+  "compatibilityLevel": "JAVA_17",
+  "client": [
+    "DashboardListMixin",
+    "DashboardListSelectorScreenMixin",
+    "VehicleSelectorScreenAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
