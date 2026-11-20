@@ -1,3 +1,5 @@
+[English](README.md) | [简体中文](README_zh-CN.md)
+
 # MTR Category Filter
 
 A client-side mod built for **Fabric Loader**, Minecraft 1.20.1, and MTR 4.0.5. It adds searchable custom tags to MTR's vehicle, eye-candy object, and rail-style selectors without changing the displayed resource names or the existing name search.
