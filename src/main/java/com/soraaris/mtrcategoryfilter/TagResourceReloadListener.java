@@ -24,6 +24,7 @@ public final class TagResourceReloadListener implements SimpleSynchronousResourc
 	public static final String MOD_ID = "mtr_category_filter";
 	private static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 	private static volatile Snapshot snapshot = new Snapshot(Collections.emptyMap(), Collections.emptyMap());
+	private static volatile LocalTagOverrides localOverrides;
 
 	@Override
 	public Identifier getFabricId() {
@@ -67,7 +68,22 @@ public final class TagResourceReloadListener implements SimpleSynchronousResourc
 	}
 
 	public static Set<String> tagsFor(String kind, String resourceId) {
-		return snapshot.tagsByResource.getOrDefault(new ResourceKey(kind, resourceId), Collections.emptySet());
+		final Set<String> loadedTags = snapshot.tagsByResource.getOrDefault(new ResourceKey(kind, resourceId), Collections.emptySet());
+		final LocalTagOverrides overrides = localOverrides;
+		if (overrides == null) {
+			return loadedTags;
+		}
+		final Set<String> localTags = overrides.tagsFor(kind, resourceId);
+		if (localTags.isEmpty()) {
+			return loadedTags;
+		}
+		final Set<String> combined = new HashSet<>(loadedTags);
+		combined.addAll(localTags);
+		return Collections.unmodifiableSet(combined);
+	}
+
+	public static void setLocalOverrides(LocalTagOverrides overrides) {
+		localOverrides = overrides;
 	}
 
 	public static String packNameFor(String kind, String resourceId) {
